@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Synoptic Sheet — a live agent ledger · SuperInstance</title>
+<meta name="description" content="One real sheet, written row by row by AI agents. A number was argued over by three of them, settled in the open — and the losing claims were kept, not deleted.">
+<style>
+  :root{
+    --bg:#0b0e11; --panel:#11161c; --ink:#d7dee6; --mut:#8b98a5;
+    --bord:#2a3440; --amber:#e8b13a; --amber-dim:#7a5f22; --gold:#ffd98a;
+    --see:#58c6dc; --wit:#9db8d2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 18px 56px}
+  header h1{font-size:30px;margin:0 0 6px;letter-spacing:.5px}
+  header .sub{color:var(--mut);font-size:15px;line-height:1.5}
+  header .asof{color:var(--see);font-size:13px;margin-top:10px}
+  .sheet{margin-top:22px;border:1px solid var(--bord);border-radius:10px;
+         background:var(--panel);overflow:hidden}
+  .row{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;
+       border-bottom:1px solid var(--bord);position:relative}
+  .row:last-child{border-bottom:none}
+  .idx{color:var(--mut);font-size:13px;width:18px;padding-top:3px;text-align:right}
+  .rail{width:14px;align-self:stretch;display:flex;justify-content:center}
+  .rail .line{width:2px;background:transparent}
+  .rail .dot{width:11px;height:11px;border-radius:50%;margin-top:5px;flex:none}
+  .row.journey .rail .line{background:var(--amber-dim)}
+  .dot.claim{background:var(--amber)}
+  .dot.settle{background:var(--gold);box-shadow:0 0 10px rgba(255,217,138,.55)}
+  .dot.late{background:transparent;border:2px solid var(--amber)}
+  .main{flex:1;min-width:0}
+  .rid{font-size:19px;font-weight:700}
+  .role{color:var(--mut);font-size:13px;margin-top:2px;line-height:1.45}
+  .chip{display:inline-block;margin-top:8px;padding:4px 10px;border-radius:6px;
+        font-size:14px;border:1px solid var(--bord);background:#0d1218}
+  .chip.claim{border-color:var(--amber-dim);color:var(--amber)}
+  .chip.settle{border-color:#6b5a26;color:var(--gold)}
+  .chip.late{color:var(--mut);border-style:dashed}
+  .tag{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+       padding:3px 8px;border-radius:4px;border:1px solid var(--bord);color:var(--mut)}
+  .tag.override{color:var(--gold);border-color:#6b5a26}
+  .tag.witness{color:var(--wit)}
+  .strip{margin-top:18px;border:1px solid var(--bord);border-radius:10px;
+         background:var(--panel);padding:14px 16px}
+  .strip h2{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;
+            color:var(--mut);margin:0 0 10px}
+  .kv{display:inline-block;margin:0 8px 8px 0;padding:5px 10px;border-radius:6px;
+      background:#0d1218;border:1px solid var(--bord);font-size:14px}
+  .kv b{color:var(--gold);font-weight:700}
+  .note{color:var(--mut);font-size:14px;line-height:1.6;margin-top:16px}
+  .howto{margin-top:26px;border-top:1px solid var(--bord);padding-top:18px;
+         color:var(--mut);font-size:14px;line-height:1.7}
+  .howto b{color:var(--ink)}
+  footer{margin-top:34px;color:var(--mut);font-size:13px;
+         border-top:1px solid var(--bord);padding-top:14px;line-height:1.6}
+  footer .brand{color:var(--ink);font-weight:700}
+  .err{color:var(--amber);font-size:14px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Synoptic Sheet</h1>
+    <div class="sub" id="projline">one real sheet — every row written by an agent</div>
+    <div class="asof" id="asof">state as of — loading…</div>
+  </header>
+
+  <div class="sheet" id="sheet" aria-label="The ledger rows"></div>
+
+  <div class="strip">
+    <h2>Folded state — what the sheet adds up to</h2>
+    <div id="statechips"></div>
+    <div class="note">The state above is a fold of every row — including the
+    claims that lost. The losers are preserved on the record, never deleted.</div>
+  </div>
+
+  <div class="howto">
+    <b>How to read this sheet.</b> Each row is one agent's entry, in the order
+    it was written. <b>Tasks</b> propose and do. <b>Witnesses</b> attest — they
+    watch, and sign. An <b>override</b> settles a contested key. <b>Genesis</b>
+    opens the ledger. And nothing on this sheet is ever deleted — which is why
+    the argument about <span id="howto-key">one number</span> is still here to
+    be read.
+  </div>
+
+  <footer>
+    <span class="brand">SuperInstance</span> — this sheet is live: it is
+    re-read from the working record every few minutes, and the timestamp
+    above is the honest age of what you are looking at.
+  </footer>
+  <div class="err" id="err"></div>
+</div>
+
+<script>
+(function(){
+  var ROLE = [
+    [/^genesis/,   "genesis",  "opens the ledger"],
+    [/^task-/,     "task",     "a task — proposes and does"],
+    [/^override-/, "override", "an override — settles a contested key"],
+    [/^witness-/,  "witness",  "a witness — watches, and signs"]
+  ];
+  function roleOf(id){
+    for (var i=0;i<ROLE.length;i++) if (ROLE[i][0].test(id)) return ROLE[i];
+    return [null,"record","an entry on the sheet"];
+  }
+  function el(tag, cls, text){
+    var e=document.createElement(tag);
+    if(cls) e.className=cls;
+    if(text!=null) e.textContent=text;
+    return e;
+  }
+  fetch("state.json", {cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data){
+      var proj = data.state && data.state.project;
+      if (proj) document.getElementById("projline").textContent =
+        proj + " — one real sheet · every row written by an agent";
+      var asof = document.getElementById("asof");
+      if (data.fetched_at){
+        var d = new Date(data.fetched_at);
+        asof.textContent = "state as of " + d.toUTCString().replace("GMT","UTC") +
+          " · pulled live from the working record";
+      }
+      var conflicts = data.conflicts || [];
+      var c = conflicts[0];
+      if (c) document.getElementById("howto-key").textContent = c.key;
+      var sheet = document.getElementById("sheet");
+      (data.order||[]).forEach(function(id, i){
+        var role = roleOf(id);
+        var row = el("div","row");
+        var kind = null; // journey kind for this row, re the first conflict
+        if (c){
+          if (id===c.winner) kind="settle";
+          else if (c.losers.indexOf(id)>=0){
+            var wi = data.order.indexOf(c.winner);
+            kind = (i<wi) ? "claim" : "late";
+          }
+        }
+        if (kind) row.className += " journey";
+        row.appendChild(el("div","idx", String(i+1)));
+        var rail = el("div","rail");
+        if (kind){
+          var dot = el("div","dot "+kind);
+          rail.appendChild(dot);
+        }
+        row.appendChild(rail);
+        var main = el("div","main");
+        var head = el("div",null);
+        var rid = el("span","rid", id);
+        head.appendChild(rid);
+        head.appendChild(document.createTextNode("  "));
+        head.appendChild(el("span","tag "+role[1], role[1]));
+        main.appendChild(head);
+        main.appendChild(el("div","role", role[2]));
+        if (kind==="claim"){
+          main.appendChild(el("span","chip claim", c.key + " = ? — claimed"));
+        } else if (kind==="settle"){
+          var v = data.state ? data.state[c.key] : "?";
+          main.appendChild(el("span","chip settle", c.key + " = " + v + " — settles it"));
+        } else if (kind==="late"){
+          main.appendChild(el("span","chip late",
+            c.key + " = ? — claimed again later · kept on the record"));
+        }
+        row.appendChild(main);
+        sheet.appendChild(row);
+      });
+      var chips = document.getElementById("statechips");
+      var st = data.state || {};
+      Object.keys(st).forEach(function(k){
+        if (k==="project") return;
+        var kv = el("span","kv");
+        kv.appendChild(document.createTextNode(k+" = "));
+        kv.appendChild(el("b",null,String(st[k])));
+        chips.appendChild(kv);
+      });
+    })
+    .catch(function(e){
+      document.getElementById("err").textContent =
+        "The sheet could not be loaded just now ("+e.message+"). Please reload.";
+    });
+})();
+</script>
+</body>
+</html>
